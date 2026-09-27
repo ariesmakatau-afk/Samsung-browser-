@@ -45,7 +45,8 @@ android {
 }
 
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.8.0")
+    implementation("androidx.activity:activity:1.13.0")
+    implementation("androidx.core:core:1.19.1")
     implementation("androidx.webkit:webkit:1.17.1")
     // Declared directly only so the manifest can switch off its EmojiCompat initializer.
     implementation("androidx.startup:startup-runtime:1.1.1")

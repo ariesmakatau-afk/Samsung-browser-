@@ -1,6 +1,7 @@
 package com.zerotrace.browser
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -31,8 +32,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -43,7 +43,7 @@ import androidx.webkit.WebViewFeature
 import java.io.ByteArrayInputStream
 import java.util.concurrent.ConcurrentHashMap
 
-class MainActivity : AppCompatActivity(), TorController.Listener {
+class MainActivity : ComponentActivity(), TorController.Listener {
 
     private class Tab(val webView: WebView) {
         var title: String = "New tab"

@@ -25,6 +25,14 @@ jobs:
       - name: Build
         run: ./gradlew assembleRelease lintDebug --no-daemon
 
+      # Fails the build if the APK gains extra permissions, tracking/analytics/ads/crash
+      # SDKs, its own network code, device-ID APIs, or unreviewed hard-coded URLs.
+      - name: Privacy audit
+        run: tools/privacy-audit.sh app/build/outputs/apk/release/app-release.apk
+
+      - name: APK fingerprint
+        run: sha256sum app/build/outputs/apk/release/app-release.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: ZeroTrace-apk

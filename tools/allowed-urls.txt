@@ -1,0 +1,10 @@
+http://
+https://
+http://crbug.com
+https://crbug.com
+https://duckduckgo.com
+https://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion
+https://search.brave.com
+https://www.mojeek.com
+https://www.startpage.com
+https://check.torproject.org

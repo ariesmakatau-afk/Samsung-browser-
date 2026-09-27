@@ -82,8 +82,8 @@ normal connection.
 
 | Requirement | Status |
 | --- | --- |
-| No analytics or telemetry | ✅ No analytics code or SDKs. WebView metrics are opted out in the manifest. |
-| No advertising SDKs | ✅ None. The dependencies are AndroidX, Kotlin, tor-android and jtorctl only. |
+| No analytics or telemetry | ✅ No analytics code or SDKs (enforced by `tools/privacy-audit.sh`). WebView metrics are opted out in the manifest. |
+| No advertising SDKs | ✅ None. The dependencies are a few AndroidX core libraries, Kotlin, tor-android and jtorctl only. |
 | No crash-reporting services | ✅ None in the app. (Android and WebView have their own system-level crash settings.) |
 | No connection to the developer's servers | ✅ There are none. The app only connects to the Tor network and to the sites you open. |
 | No account/login system | ✅ |
@@ -103,6 +103,42 @@ normal connection.
 | No unnecessary persistent identifiers | ✅ No IDs are created or stored. The WebView profile and Tor state are new every session. |
 | No URLs sent to "safe browsing" or search services unless chosen | ✅ Safe Browsing is off. Only text you type in the address bar goes to the search engine *you* pick (or none). No search suggestions. |
 | Configurable DNS/search | Search: ✅. DNS: intentionally ❌. Every lookup is resolved by the Tor network, because using any other DNS server would reveal the sites you visit and your IP. |
+
+## Proving it doesn't secretly send data
+
+**1. Automatic audit on every build.** `tools/privacy-audit.sh` inspects the compiled
+APK, not just the source, and the build fails if any of these show up:
+
+- a permission other than `INTERNET`;
+- any known analytics, advertising, attribution or crash-reporting SDK (Firebase,
+  Google Play Services, Crashlytics, Sentry, Facebook, AppsFlyer, Adjust, Mixpanel
+  and about 40 more);
+- *any* app code that opens a network connection itself. The only socket code
+  allowed is the local control channel to the embedded Tor process, so every
+  byte that leaves the phone has to go through Tor to a site you opened;
+- device-identifier APIs: advertising ID, Android ID, IMEI, phone number, serial,
+  MAC address, accounts, location, installed-apps list;
+- any hard-coded web address not on the reviewed allowlist
+  (`tools/allowed-urls.txt`: the search engines and the "check Tor" link).
+
+Run it yourself with `./gradlew assembleRelease && tools/privacy-audit.sh`.
+
+**2. Watch the traffic on your own phone.** Install
+[PCAPdroid](https://github.com/emanuele-f/PCAPdroid) (free, open source, no root),
+start a capture filtered to ZeroTrace, and browse for a while. You should see:
+
+- **zero DNS queries** from ZeroTrace (Tor connects to relays by IP address, and
+  websites' names are resolved inside the Tor network);
+- connections **only to Tor relays** (IP addresses, usually on ports 443 or 9001),
+  and nothing to Google, Samsung, analytics companies or any "developer" server;
+- no traffic at all after you tap 🔥 (the app process is gone).
+
+Traffic attributed to *Android System WebView*, *Google Play services* or the
+*Galaxy Store* belongs to those system apps (for example, their own updates), not
+to ZeroTrace.
+
+**3. Match the APK to the source.** Every CI run prints the SHA-256 of the APK it
+built from this exact code, so you can compare it with the file you installed.
 
 ## Limits you should know about
 
