@@ -56,6 +56,16 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/burnButton"
+            android:layout_width="40dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:contentDescription="@string/exit_wipe"
+            android:gravity="center"
+            android:text="🔥"
+            android:textSize="20sp" />
+
+        <TextView
             android:id="@+id/menuButton"
             android:layout_width="40dp"
             android:layout_height="48dp"

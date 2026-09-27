@@ -24,7 +24,9 @@ default apps → Browser app).
 | Open a new tab | ⋮ → New tab, or tap the tab counter → New tab |
 | Switch or close tabs | Tap the square tab counter next to the address bar |
 | Start over as a different person | ⋮ → **New identity** (erases everything and reconnects with new Tor circuits and a new fingerprint) |
-| Close and erase everything | ⋮ → **Exit & wipe everything**, press Back twice on the last page, or swipe the app away in Recents |
+| Close and erase everything | **One tap on 🔥**, or ⋮ → Exit & wipe everything, press Back twice on the last page, or swipe the app away in Recents |
+| See every connection a page made | ⋮ → **Connections** (in memory only; shows what was loaded and what was blocked) |
+| Choose or turn off search | ⋮ → **Search engine**: DuckDuckGo, DuckDuckGo onion, Startpage, Brave Search, Mojeek, or None |
 
 The dot on the left of the address bar turns purple once you are connected
 through Tor. Until then, **nothing loads at all**: there is no fallback to a
@@ -56,6 +58,9 @@ normal connection.
 - Google Safe Browsing, WebView metrics, Media Integrity (Play device attestation),
   ad attribution and payment APIs are turned off.
 - Third-party cookies are blocked.
+- About 280 known tracker, analytics and ad domains are blocked when loaded as a third
+  party (`assets/trackers.txt`). The list ships with the app and is never updated
+  over the network.
 - Downloads, file uploads and links that open other apps (`intent:`, `tel:`,
   `market:` and so on) are blocked, because they are common ways to escape Tor or
   to leak photo GPS data.
@@ -72,6 +77,32 @@ normal connection.
 - Every session uses a new, randomly named WebView profile.
 - The app blocks screenshots and screen recording, and its Recents thumbnail is
   blank. Android backup and device-to-device transfer are disabled.
+
+## Privacy checklist
+
+| Requirement | Status |
+| --- | --- |
+| No analytics or telemetry | ✅ No analytics code or SDKs. WebView metrics are opted out in the manifest. |
+| No advertising SDKs | ✅ None. The dependencies are AndroidX, Kotlin, tor-android and jtorctl only. |
+| No crash-reporting services | ✅ None in the app. (Android and WebView have their own system-level crash settings.) |
+| No connection to the developer's servers | ✅ There are none. The app only connects to the Tor network and to the sites you open. |
+| No account/login system | ✅ |
+| No remote configuration or tracking | ✅ Nothing is fetched to configure the app. The tracker list is bundled. |
+| Doesn't collect history, URLs, searches, IPs, device IDs or usage stats | ✅ Nothing is collected or sent anywhere. |
+| Doesn't store browsing data | ⚠️ Cookies and cache exist *during* a session (sites need them) and are deleted on exit and on every launch. The only thing kept is your search-engine choice. |
+| One-tap Clear all | ✅ 🔥 button |
+| Doesn't retain cookies | ✅ Deleted on exit; third-party cookies are never accepted. |
+| Blocks third-party trackers | ✅ Bundled list of about 280 domains. Basic: not as complete as uBlock Origin. |
+| No injected tracking scripts, pixels or affiliate IDs | ✅ The only script added to pages is the local, open-source privacy script (`assets/privacy_shim.js`), which *removes* tracking surfaces. |
+| Doesn't sell, share or transmit browsing data | ✅ |
+| Network connections visible/auditable | ✅ ⋮ → Connections lists every request per tab. (Not shown: WebSockets, and Tor's own connections to relays.) |
+| HTTPS wherever available | ✅ Stricter than that: `http://` is always upgraded to `https://` (except `.onion`), so http-only sites won't load. |
+| Source code available | ✅ Everything is in this repository. |
+| Minimal permissions | ✅ `INTERNET` only. No contacts, location, mic, camera, Bluetooth, files, phone or accounts. |
+| No Android advertising ID | ✅ Never read. The `AD_ID` permission is explicitly stripped from the manifest. |
+| No unnecessary persistent identifiers | ✅ No IDs are created or stored. The WebView profile and Tor state are new every session. |
+| No URLs sent to "safe browsing" or search services unless chosen | ✅ Safe Browsing is off. Only text you type in the address bar goes to the search engine *you* pick (or none). No search suggestions. |
+| Configurable DNS/search | Search: ✅. DNS: intentionally ❌. Every lookup is resolved by the Tor network, because using any other DNS server would reveal the sites you visit and your IP. |
 
 ## Limits you should know about
 
@@ -119,6 +150,8 @@ straight away. Use your own signing key if you distribute it.
 | `MainActivity.kt` | Tabs, address bar, menu, SOCKS5 proxy override (no direct fallback), permission denials |
 | `Privacy.kt` | WebView lockdown: UA and client hints, Safe Browsing off, Media Integrity off, etc. |
 | `assets/privacy_shim.js` | Runs before any page script in every frame: WebRTC kill, UTC, fixed hardware values, canvas/WebGL/audio noise |
+| `TrackerBlocker.kt`, `assets/trackers.txt` | Bundled third-party tracker blocklist |
+| `Settings.kt` | Search-engine choice (the only stored setting) |
 | `Wiper.kt` | Deletes every file the app owns, clears WebView stores and the clipboard, kills the process |
 | `WipeWatcherService.kt` | Wipes when you swipe the app away from Recents |
 | `RestartActivity.kt` | Relaunches a completely fresh browser for "New identity" |

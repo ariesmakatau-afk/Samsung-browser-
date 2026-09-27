@@ -33,7 +33,16 @@ object Wiper {
     fun wipeDisk(context: Context) {
         val dataDir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) context.dataDir
         else context.filesDir.parentFile
-        dataDir?.listFiles()?.forEach { if (it.name !in KEEP) deleteTree(it) }
+        dataDir?.listFiles()?.forEach { f ->
+            when {
+                f.name in KEEP -> Unit
+                // Keep only the search-engine choice (see Settings); delete every other pref file.
+                f.name == "shared_prefs" -> f.listFiles()?.forEach {
+                    if (it.name != "${Settings.PREFS_NAME}.xml") deleteTree(it)
+                }
+                else -> deleteTree(f)
+            }
+        }
         runCatching { context.externalCacheDirs?.forEach { dir -> dir?.let(::deleteTree) } }
         runCatching { context.getExternalFilesDirs(null)?.forEach { dir -> dir?.let(::deleteTree) } }
     }

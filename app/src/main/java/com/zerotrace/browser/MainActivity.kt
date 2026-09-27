@@ -20,6 +20,7 @@ import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.BaseAdapter
@@ -39,7 +40,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.ProxyConfig
 import androidx.webkit.ProxyController
 import androidx.webkit.WebViewFeature
-import java.net.URLEncoder
+import java.io.ByteArrayInputStream
+import java.util.concurrent.ConcurrentHashMap
 
 class MainActivity : AppCompatActivity(), TorController.Listener {
 
@@ -47,7 +49,25 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
         var title: String = "New tab"
         var url: String = ""
         var progress: Int = 100
+        /** Host of the page shown in this tab; used to tell first- from third-party requests. */
+        @Volatile var pageHost: String? = null
+        /** Every request this tab made, kept in memory only (never written to disk). */
+        val connections = ArrayDeque<Connection>()
+        var blockedCount = 0
+
+        @Synchronized fun record(c: Connection) {
+            if (c.blocked) blockedCount++
+            connections.addLast(c)
+            while (connections.size > MAX_LOG) connections.removeFirst()
+        }
+
+        @Synchronized fun snapshot(): List<Connection> = connections.toList()
     }
+
+    private class Connection(val url: String, val method: String, val blocked: Boolean, val mainFrame: Boolean)
+
+    /** Lookup for the WebView callbacks that run on background threads. */
+    private val tabByView = ConcurrentHashMap<WebView, Tab>()
 
     private lateinit var address: EditText
     private lateinit var tabCount: TextView
@@ -98,6 +118,9 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
         address.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) updateChrome() }
         tabCount.setOnClickListener { showTabs() }
         findViewById<View>(R.id.menuButton).setOnClickListener { showMenu(it) }
+        // One tap: erase everything and close.
+        findViewById<View>(R.id.burnButton).setOnClickListener { exitAndWipe() }
+        TrackerBlocker.load(this)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleBack()
         })
@@ -185,6 +208,7 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
     private fun newTab(url: String?) {
         if (!browsingAllowed) return
         val tab = Tab(createWebView())
+        tabByView[tab.webView] = tab
         tabs.add(tab)
         switchTo(tabs.lastIndex)
         if (url != null) load(tab, url) else showStartPage(tab)
@@ -205,6 +229,7 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
 
     private fun closeTab(index: Int) {
         val tab = tabs.removeAt(index)
+        tabByView.remove(tab.webView)
         if (index == current) webContainer.removeAllViews()
         destroyWebView(tab.webView)
         when {
@@ -236,19 +261,23 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
     private fun navigate(input: String) {
         val text = input.trim()
         if (text.isEmpty()) return
-        val url = toUrl(text)
+        val url = toUrl(text) ?: return
         hideKeyboard()
         val tab = currentTab()
         if (tab == null) newTab(url) else load(tab, url)
     }
 
-    private fun toUrl(text: String): String {
+    private fun toUrl(text: String): String? {
         val lower = text.lowercase()
         if (lower.startsWith("https://")) return text
         if (lower.startsWith("http://")) return upgrade(Uri.parse(text)).toString()
         val looksLikeHost = !text.contains(' ') && text.contains('.') && !text.endsWith('.')
         if (looksLikeHost) return upgrade(Uri.parse("https://$text")).toString()
-        return "https://duckduckgo.com/?q=" + URLEncoder.encode(text, "UTF-8")
+        val url = Settings.searchEngine(this).urlFor(text)
+        if (url == null) {
+            Toast.makeText(this, "Search is turned off. Type a web address, or pick a search engine in ⋮.", Toast.LENGTH_LONG).show()
+        }
+        return url
     }
 
     /** Plain http is readable by the Tor exit relay, so always use https (except .onion). */
@@ -311,6 +340,20 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
     }
 
     private val client = object : WebViewClient() {
+        // Runs on a background thread for every request the page makes. Used to block
+        // third-party trackers and to keep the per-tab connection log (memory only).
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+            val tab = tabByView[view] ?: return null
+            val uri = request.url
+            val scheme = uri.scheme?.lowercase()
+            if (scheme != "http" && scheme != "https") return null
+            val host = uri.host ?: return null
+            if (request.isForMainFrame) tab.pageHost = host
+            val blocked = !request.isForMainFrame && TrackerBlocker.shouldBlock(host, tab.pageHost)
+            tab.record(Connection(uri.toString(), request.method ?: "GET", blocked, request.isForMainFrame))
+            return if (blocked) WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))) else null
+        }
+
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val uri = request.url
             return when (uri.scheme?.lowercase()) {
@@ -420,8 +463,11 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
         m.add(0, 1, 0, getString(R.string.forward)).isEnabled = currentTab()?.webView?.canGoForward() == true
         m.add(0, 2, 1, getString(R.string.reload))
         m.add(0, 3, 2, getString(R.string.new_tab))
-        m.add(0, 4, 3, getString(R.string.new_identity))
-        m.add(0, 5, 4, getString(R.string.exit_wipe))
+        val tab = currentTab()
+        m.add(0, 6, 3, "Connections (${tab?.snapshot()?.size ?: 0} requests, ${tab?.blockedCount ?: 0} trackers blocked)")
+        m.add(0, 7, 4, "Search engine: ${Settings.searchEngine(this).label}")
+        m.add(0, 4, 5, getString(R.string.new_identity))
+        m.add(0, 5, 6, getString(R.string.exit_wipe))
         popup.setOnMenuItemClickListener {
             when (it.itemId) {
                 1 -> currentTab()?.webView?.goForward()
@@ -432,10 +478,47 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
                     "Closes all tabs, erases everything and reconnects to Tor with new circuits and a new fingerprint."
                 ) { wipe(restart = true) }
                 5 -> exitAndWipe()
+                6 -> showConnections()
+                7 -> chooseSearchEngine()
             }
             true
         }
         popup.show()
+    }
+
+    private fun showConnections() {
+        val tab = currentTab() ?: return
+        val log = tab.snapshot().asReversed()
+        val lines = log.map { c ->
+            val tag = when {
+                c.blocked -> "✕ BLOCKED  "
+                c.mainFrame -> "▶ PAGE  "
+                else -> "→ ${c.method}  "
+            }
+            tag + c.url.take(200)
+        }.ifEmpty { listOf("No requests yet.") }
+        AlertDialog.Builder(this)
+            .setTitle("Connections in this tab")
+            .setMessage(
+                "Every request below went through Tor, or was blocked before leaving the phone. " +
+                    "Newest first. This list lives in memory only and is erased with everything else."
+            )
+            .setItems(lines.toTypedArray(), null)
+            .setPositiveButton("Close", null)
+            .show()
+    }
+
+    private fun chooseSearchEngine() {
+        val engines = SearchEngine.entries
+        val selected = engines.indexOf(Settings.searchEngine(this))
+        AlertDialog.Builder(this)
+            .setTitle("Search engine")
+            .setSingleChoiceItems(engines.map { it.label }.toTypedArray(), selected) { d, which ->
+                Settings.setSearchEngine(this, engines[which])
+                d.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun confirm(title: String, message: String, action: () -> Unit) {
@@ -491,6 +574,7 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
         webContainer.removeAllViews()
         tabs.forEach { destroyWebView(it.webView) }
         tabs.clear()
+        tabByView.clear()
         tor?.stop()
         Wiper.wipeAndExit(this, this, restart)
     }
@@ -518,3 +602,5 @@ class MainActivity : AppCompatActivity(), TorController.Listener {
         super.onDestroy()
     }
 }
+
+private const val MAX_LOG = 1000

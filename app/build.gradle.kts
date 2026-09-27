@@ -47,6 +47,8 @@ android {
 dependencies {
     implementation("androidx.appcompat:appcompat:1.8.0")
     implementation("androidx.webkit:webkit:1.17.1")
+    // Declared directly only so the manifest can switch off its EmojiCompat initializer.
+    implementation("androidx.startup:startup-runtime:1.1.1")
     implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     implementation("info.guardianproject:tor-android:0.4.9.12")
     implementation("info.guardianproject:jtorctl:0.4.5.7")
