@@ -1,0 +1,9 @@
+<resources>
+    <color name="bg">#FF101114</color>
+    <color name="bar">#FF1A1C21</color>
+    <color name="field">#FF272A31</color>
+    <color name="text">#FFECEDEF</color>
+    <color name="text_dim">#FF9AA0AA</color>
+    <color name="accent">#FF7D5CFF</color>
+    <color name="danger">#FFE5484D</color>
+</resources>

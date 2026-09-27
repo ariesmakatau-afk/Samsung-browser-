@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">ZeroTrace</string>
+    <string name="address_hint">Search or enter address</string>
+    <string name="connecting">Connecting to Tor…</string>
+    <string name="tabs">Tabs</string>
+    <string name="new_tab">New tab</string>
+    <string name="new_identity">New identity</string>
+    <string name="exit_wipe">Exit &amp; wipe everything</string>
+    <string name="reload">Reload</string>
+    <string name="forward">Forward</string>
+    <string name="menu">Menu</string>
+    <string name="close_tab">Close tab</string>
+</resources>
