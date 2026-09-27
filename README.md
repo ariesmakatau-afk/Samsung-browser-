@@ -23,7 +23,7 @@ default apps → Browser app).
 | --- | --- |
 | Open a new tab | ⋮ → New tab, or tap the tab counter → New tab |
 | Switch or close tabs | Tap the square tab counter next to the address bar |
-| Start over as a different person | ⋮ → **New identity** (erases everything and reconnects with new Tor circuits and a new fingerprint) |
+| Start over as a different person (e.g. to use another account) | **Tap 🎭 New identity**: erases everything and reconnects through a *different* Tor exit with a new fingerprint |
 | Close and erase everything | **One tap on 🔥**, or ⋮ → Exit & wipe everything, press Back twice on the last page, or swipe the app away in Recents |
 | See every connection a page made | ⋮ → **Connections** (in memory only; shows what was loaded and what was blocked) |
 | Choose or turn off search | ⋮ → **Search engine**: DuckDuckGo, DuckDuckGo onion, Startpage, Brave Search, Mojeek, or None |
@@ -53,8 +53,11 @@ normal connection.
   (`X-Requested-With`) header.
 - CPU cores, RAM, touch points and storage quota are set to fixed common values.
   Battery, network type, Bluetooth, USB, gamepads, cameras and microphones are hidden.
-- Canvas, WebGL and audio fingerprints get random noise that changes every session,
-  so a fingerprint taken today can't be matched tomorrow. The GPU model is hidden.
+- Canvas and audio fingerprints get random noise that changes every session, so a
+  fingerprint taken today can't be matched tomorrow.
+- WebGL and WebGPU are off (they reveal the GPU model). Installed text-to-speech
+  voices are hidden, and the reported screen size is the browser window rather
+  than the phone's exact screen.
 - Google Safe Browsing, WebView metrics, Media Integrity (Play device attestation),
   ad attribution and payment APIs are turned off.
 - Third-party cookies are blocked.
@@ -103,6 +106,50 @@ normal connection.
 | No unnecessary persistent identifiers | ✅ No IDs are created or stored. The WebView profile and Tor state are new every session. |
 | No URLs sent to "safe browsing" or search services unless chosen | ✅ Safe Browsing is off. Only text you type in the address bar goes to the search engine *you* pick (or none). No search suggestions. |
 | Configurable DNS/search | Search: ✅. DNS: intentionally ❌. Every lookup is resolved by the Tor network, because using any other DNS server would reveal the sites you visit and your IP. |
+
+## Using two accounts on the same website
+
+Goal: log in as account A, then as account B, without the site being able to tell
+that both are you.
+
+**Do this every time:**
+1. Finish with account A (logging out is optional).
+2. Tap **🎭 New identity** and wait for "New identity ready".
+3. Log in with account B.
+
+**What 🎭 changes, and why it matters:**
+
+| What a site could use to link A and B | After 🎭 |
+| --- | --- |
+| IP address | New Tor circuits. The exit relays account A used (and their /16 networks) are **excluded** for the new identity, so B can't get A's IP. |
+| Cookies, local storage, IndexedDB, cache, service workers, HSTS, TLS session tickets | All gone. The whole app process is killed and its files deleted. |
+| Canvas / audio fingerprint | New random noise, so the hashes differ. |
+| GPU, text-to-speech voices, exact screen size, battery, network type, time zone, language, CPU/RAM | Hidden or set to the same value for everyone, both before and after. |
+
+**Never:**
+- Use A and B in the same identity, even in different tabs. Tabs share cookies
+  and the Tor exit for a given site.
+- Reuse anything personal between the accounts: email, phone number (SMS
+  verification links accounts instantly), recovery address, password, username
+  style, profile photo or payment method.
+- Switch straight from A to B. Logging out of A and into B a few seconds later
+  from Tor is itself a clue. Leave some time between them.
+- Write, post or behave the same way in both accounts.
+
+**What can still link them (honestly):**
+- **Being a rare kind of visitor.** Both logins come from Tor, and both come from
+  a ZeroTrace-style browser (Chrome engine, no WebGL, UTC time zone, Android
+  screen width). On a site with few Tor users, that combination alone is a hint,
+  even though nothing unique is shared. Tor Browser hides this better because
+  millions of people share its exact fingerprint.
+- **A few stable traits remain:** the browser window size in CSS pixels, installed
+  fonts (the same across Samsung phones of one model / One UI version) and the
+  WebView version.
+- **Large anti-fraud systems** (Google, Meta, banks, marketplaces) combine many weak
+  signals with behavior (typing rhythm, timing, what you look at). No browser can
+  guarantee they won't link two accounts. For accounts that must never be linked,
+  use the official Tor Browser, and ideally a separate device, in addition to the
+  rules above.
 
 ## Proving it doesn't secretly send data
 

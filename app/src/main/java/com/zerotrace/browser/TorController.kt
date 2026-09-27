@@ -17,7 +17,12 @@ import org.torproject.jni.TorService
  * ready. All web traffic is sent through it, so websites only ever see the IP
  * address of a random Tor exit relay, never yours.
  */
-class TorController(private val context: Context, private val listener: Listener) {
+class TorController(
+    private val context: Context,
+    private val listener: Listener,
+    /** Exit relays (and their /16 networks) used by the previous identity. Never reused. */
+    private val excludeExits: List<String> = emptyList(),
+) {
 
     interface Listener {
         fun onTorProgress(percent: Int, summary: String)
@@ -72,7 +77,10 @@ class TorController(private val context: Context, private val listener: Listener
             # Every website gets its own circuit, so trackers on different sites
             # can't link your visits by exit IP.
             SocksPort auto IsolateDestAddr
-            """.trimIndent() + "\n"
+            """.trimIndent() + "\n" +
+                // After "New identity", never leave through the exits the previous identity
+                // used (or their networks), so the site can't see the same IP for both accounts.
+                (if (excludeExits.isNotEmpty()) "ExcludeExitNodes ${excludeExits.joinToString(",")}\n" else "")
         )
     }
 
@@ -99,6 +107,36 @@ class TorController(private val context: Context, private val listener: Listener
         }, "tor-bootstrap").apply { isDaemon = true }.start()
     }
 
+    /**
+     * Exit relays of all circuits this Tor instance has built, as "\$FINGERPRINT" plus
+     * their "a.b.0.0/16" network. Kept in memory only and handed to the next identity.
+     */
+    fun recentExits(): ArrayList<String> {
+        val out = ArrayList<String>()
+        val s = service ?: return out
+        val result = arrayOf<List<String>>(emptyList())
+        val t = Thread {
+            val status = runCatching { s.getInfo("circuit-status") }.getOrNull().orEmpty()
+            val fps = status.lineSequence()
+                .mapNotNull { it.trim().split(' ').getOrNull(2)?.split(',')?.lastOrNull() }
+                .map { it.substringBefore('~').substringBefore('=') }
+                .filter { FINGERPRINT.matches(it) }
+                .toSet()
+            val list = ArrayList<String>(fps)
+            for (fp in fps) {
+                val ns = runCatching { s.getInfo("ns/id/${fp.removePrefix("$")}") }.getOrNull() ?: continue
+                val ip = ns.lineSequence().firstOrNull { it.startsWith("r ") }?.split(' ')?.getOrNull(6) ?: continue
+                val parts = ip.split('.')
+                if (parts.size == 4) list.add("${parts[0]}.${parts[1]}.0.0/16")
+            }
+            result[0] = list
+        }
+        t.start()
+        t.join(3000)
+        out.addAll(result[0].distinct().take(200))
+        return out
+    }
+
     fun stop() {
         stopped = true
         runCatching { LocalBroadcastManager.getInstance(context).unregisterReceiver(errorReceiver) }
@@ -107,3 +145,5 @@ class TorController(private val context: Context, private val listener: Listener
         runCatching { context.stopService(Intent(context, TorService::class.java)) }
     }
 }
+
+private val FINGERPRINT = Regex("""\$[0-9A-Fa-f]{40}""")

@@ -45,6 +45,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 class MainActivity : ComponentActivity(), TorController.Listener {
 
+    companion object {
+        const val EXTRA_EXCLUDE_EXITS = "exclude_exits"
+    }
+
     private class Tab(val webView: WebView) {
         var title: String = "New tab"
         var url: String = ""
@@ -85,6 +89,7 @@ class MainActivity : ComponentActivity(), TorController.Listener {
     private var lastBackPress = 0L
     private val pendingUrls = ArrayList<String>()
     private var startPage: String? = null
+    private var freshIdentity = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -120,6 +125,7 @@ class MainActivity : ComponentActivity(), TorController.Listener {
         findViewById<View>(R.id.menuButton).setOnClickListener { showMenu(it) }
         // One tap: erase everything and close.
         findViewById<View>(R.id.burnButton).setOnClickListener { exitAndWipe() }
+        findViewById<View>(R.id.identityButton).setOnClickListener { confirmNewIdentity() }
         TrackerBlocker.load(this)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleBack()
@@ -144,7 +150,10 @@ class MainActivity : ComponentActivity(), TorController.Listener {
             )
             return
         }
-        tor = TorController(applicationContext, this).also { it.start() }
+        val excluded = intent.getStringArrayListExtra(EXTRA_EXCLUDE_EXITS)
+        freshIdentity = excluded != null
+        intent.removeExtra(EXTRA_EXCLUDE_EXITS)
+        tor = TorController(applicationContext, this, excluded.orEmpty()).also { it.start() }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -185,6 +194,17 @@ class MainActivity : ComponentActivity(), TorController.Listener {
                 torBadge.setTextColor(ContextCompat.getColor(this, R.color.accent))
                 if (tabs.isEmpty() && pendingUrls.isEmpty()) newTab(null)
                 flushPendingUrls()
+                if (freshIdentity) {
+                    freshIdentity = false
+                    AlertDialog.Builder(this)
+                        .setTitle("New identity ready")
+                        .setMessage(
+                            "Different Tor exit and IP (the previous ones are excluded), no cookies or " +
+                                "site data, and a new fingerprint.\n\nYou can now log in with a different account."
+                        )
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
             }
         } catch (e: Exception) {
             fatal("Could not route traffic through Tor: ${e.message}")
@@ -473,10 +493,7 @@ class MainActivity : ComponentActivity(), TorController.Listener {
                 1 -> currentTab()?.webView?.goForward()
                 2 -> currentTab()?.webView?.reload()
                 3 -> newTab(null)
-                4 -> confirm(
-                    "New identity",
-                    "Closes all tabs, erases everything and reconnects to Tor with new circuits and a new fingerprint."
-                ) { wipe(restart = true) }
+                4 -> confirmNewIdentity()
                 5 -> exitAndWipe()
                 6 -> showConnections()
                 7 -> chooseSearchEngine()
@@ -520,6 +537,13 @@ class MainActivity : ComponentActivity(), TorController.Listener {
             .setNegativeButton("Cancel", null)
             .show()
     }
+
+    private fun confirmNewIdentity() = confirm(
+        "New identity",
+        "Use this every time before logging in with a different account.\n\n" +
+            "Closes all tabs, erases all cookies and site data, and reconnects through a " +
+            "different Tor exit (new IP) with a new fingerprint."
+    ) { wipe(restart = true) }
 
     private fun confirm(title: String, message: String, action: () -> Unit) {
         AlertDialog.Builder(this)
@@ -575,8 +599,9 @@ class MainActivity : ComponentActivity(), TorController.Listener {
         tabs.forEach { destroyWebView(it.webView) }
         tabs.clear()
         tabByView.clear()
+        val exits = if (restart) tor?.recentExits() ?: ArrayList() else ArrayList()
         tor?.stop()
-        Wiper.wipeAndExit(this, this, restart)
+        Wiper.wipeAndExit(this, this, restart, exits)
     }
 
     override fun onPause() {

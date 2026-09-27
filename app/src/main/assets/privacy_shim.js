@@ -263,7 +263,38 @@
       };
     });
 
-    // --- WebGL: hide the GPU model, noise pixel read-backs ---------------
+    // --- Stable hardware signals that survive a new identity --------------
+    // These don't change when cookies are wiped, so they're what a site would use to
+    // tie two accounts to the same phone. Remove or flatten them.
+
+    // WebGL / WebGPU expose the GPU model and dozens of GPU-specific limits.
+    var webglRe = /^(experimental-)?webgl2?$/i;
+    function noWebGL(orig) {
+      return function (type) {
+        if (webglRe.test(String(type))) return null;
+        return orig.apply(this, arguments);
+      };
+    }
+    method(w.HTMLCanvasElement && w.HTMLCanvasElement.prototype, 'getContext', noWebGL);
+    method(w.OffscreenCanvas && w.OffscreenCanvas.prototype, 'getContext', noWebGL);
+    if (NP) remove(NP, 'gpu');
+
+    // Installed text-to-speech voices differ per phone, language pack and vendor.
+    var SSP = w.SpeechSynthesis && w.SpeechSynthesis.prototype;
+    method(SSP, 'getVoices', function () { return function () { return []; }; });
+
+    // Screen: report the browser window, not the exact panel and system-bar sizes.
+    var SP = w.Screen && w.Screen.prototype;
+    getter(SP, 'width', function () { return w.outerWidth || w.innerWidth; });
+    getter(SP, 'availWidth', function () { return w.outerWidth || w.innerWidth; });
+    getter(SP, 'height', function () { return w.outerHeight || w.innerHeight; });
+    getter(SP, 'availHeight', function () { return w.outerHeight || w.innerHeight; });
+    getter(SP, 'availTop', function () { return 0; });
+    getter(SP, 'availLeft', function () { return 0; });
+    getter(SP, 'colorDepth', function () { return 24; });
+    getter(SP, 'pixelDepth', function () { return 24; });
+
+    // --- WebGL (if a page gets a context some other way): hide GPU, add noise
     [w.WebGLRenderingContext, w.WebGL2RenderingContext].forEach(function (GL) {
       if (!GL) return;
       var P = GL.prototype;

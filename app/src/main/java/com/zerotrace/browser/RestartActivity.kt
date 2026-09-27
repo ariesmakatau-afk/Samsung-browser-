@@ -19,6 +19,11 @@ class RestartActivity : Activity() {
         if (pid > 0 && pid != Process.myPid()) Process.killProcess(pid)
         startActivity(
             Intent(this, MainActivity::class.java)
+                // In memory only: which Tor exits the old identity used, so they're avoided.
+                .putStringArrayListExtra(
+                    MainActivity.EXTRA_EXCLUDE_EXITS,
+                    intent.getStringArrayListExtra(MainActivity.EXTRA_EXCLUDE_EXITS) ?: ArrayList()
+                )
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         )
         finish()

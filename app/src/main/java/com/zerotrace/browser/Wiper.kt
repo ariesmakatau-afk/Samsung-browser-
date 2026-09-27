@@ -91,7 +91,12 @@ object Wiper {
      * memory either. With [restart] the browser comes straight back as a brand-new
      * identity (new Tor circuits, new profile, new fingerprint noise).
      */
-    fun wipeAndExit(context: Context, activity: Activity?, restart: Boolean) {
+    fun wipeAndExit(
+        context: Context,
+        activity: Activity?,
+        restart: Boolean,
+        excludeExits: ArrayList<String> = ArrayList(),
+    ) {
         val app = context.applicationContext
         wipeWebViewStores(app)
         clearClipboard(app)
@@ -105,6 +110,7 @@ object Wiper {
                     Intent(app, RestartActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         .putExtra(RestartActivity.EXTRA_PID, Process.myPid())
+                        .putStringArrayListExtra(MainActivity.EXTRA_EXCLUDE_EXITS, excludeExits)
                 )
                 activity?.finishAndRemoveTask()
                 return
